@@ -9,6 +9,14 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+/**************************************************************************
+ * FILE: background.c
+ *
+ * Animated background renderer used by sort mode. It owns moving shape
+ * particles, procedural shape generation, gradient fills, and per-theme
+ * color behavior.
+ **************************************************************************/
+
 typedef struct {
     float x, y;
     float vx, vy;
@@ -20,6 +28,24 @@ typedef struct {
     float life;
 } BgShape;
 
+/**************************************************************************
+ * draw_gradient_shape
+ *
+ * Purpose:
+ *   Draw one procedural shape (star/heart/flower) with vertical alpha
+ *   falloff and a subtle outline.
+ *
+ * Input:
+ *   renderer - SDL renderer
+ *   type     - shape type selector
+ *   cx, cy   - center position
+ *   size     - shape size scalar
+ *   rot      - rotation in radians
+ *   r,g,b,a  - base color and alpha
+ *
+ * Output:
+ *   None
+ **************************************************************************/
 static void draw_gradient_shape(
     SDL_Renderer *renderer,
     int type,
@@ -70,6 +96,7 @@ static void draw_gradient_shape(
         return;
     }
 
+    /* Scanline polygon fill: collect edge intersections per horizontal row. */
     float xints[192];
     int y0 = (int)floorf(min_y);
     int y1 = (int)ceilf(max_y);
@@ -107,6 +134,7 @@ static void draw_gradient_shape(
         }
     }
 
+    /* Draw a faint outline so shapes stay readable over bright palettes. */
     SDL_SetRenderDrawColor(renderer, (Uint8)(r * 0.52f), (Uint8)(g * 0.52f), (Uint8)(b * 0.52f), (Uint8)(a * 0.35f));
     SDL_FPoint outline[n + 1];
     for (int i = 0; i < n; i++) outline[i] = pts[i];
@@ -114,6 +142,21 @@ static void draw_gradient_shape(
     SDL_RenderLines(renderer, outline, n + 1);
 }
 
+/**************************************************************************
+ * spawn_bg_shape
+ *
+ * Purpose:
+ *   Spawn or respawn one animated shape just off-screen with a velocity
+ *   roughly toward the playfield center plus directional spread.
+ *
+ * Input:
+ *   s      - shape instance to overwrite
+ *   width  - viewport width
+ *   height - viewport height
+ *
+ * Output:
+ *   None
+ **************************************************************************/
 static void spawn_bg_shape(BgShape *s, int width, int height) {
     float cx = (float)width * 0.5f;
     float cy = (float)height * 0.5f;
@@ -157,6 +200,21 @@ static void spawn_bg_shape(BgShape *s, int width, int height) {
     s->life = 0.0f;
 }
 
+/**************************************************************************
+ * background_draw_animated
+ *
+ * Purpose:
+ *   Advance shape simulation and render the full animated background.
+ *
+ * Input:
+ *   renderer      - SDL renderer
+ *   width,height  - viewport dimensions
+ *   palette_index - active palette index
+ *   palette       - reduced palette info from sort module
+ *
+ * Output:
+ *   None
+ **************************************************************************/
 void background_draw_animated(
     SDL_Renderer *renderer,
     int width,
@@ -196,6 +254,7 @@ void background_draw_animated(
 
         float margin = s->size + 140.0f;
         bool out = (s->x < -margin || s->x > (float)width + margin || s->y < -margin || s->y > (float)height + margin);
+        /* Recycle shapes that leave screen bounds or outlive their window. */
         if (out || s->life > 22.0f) spawn_bg_shape(s, width, height);
 
         float p = (float)i / (float)shape_count;

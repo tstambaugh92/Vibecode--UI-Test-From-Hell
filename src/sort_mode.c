@@ -6,6 +6,26 @@
 #include <stdlib.h>
 #include <string.h>
 
+/**************************************************************************
+ * FILE: sort_mode.c
+ *
+ * Sorting visualizer core. This module owns algorithm op generation,
+ * per-step execution, celebration/autorestart logic, HUD/help rendering,
+ * and sort-scene drawing behavior.
+ **************************************************************************/
+
+/**************************************************************************
+ * sort_algorithm_name
+ *
+ * Purpose:
+ *   Convert algorithm enum to user-facing short name.
+ *
+ * Input:
+ *   alg - algorithm enum value
+ *
+ * Output:
+ *   const char* - static name string
+ **************************************************************************/
 const char *sort_algorithm_name(Algorithm alg) {
     switch (alg) {
         case ALG_BUBBLE: return "Bubble";
@@ -38,12 +58,38 @@ static const Palette PALETTES[9] = {
     {220,190,255, 255,215,125, 160,230,165, 255,95,235}
 };
 
+/**************************************************************************
+ * emit_op
+ *
+ * Purpose:
+ *   Append one abstract operation to the precomputed operation stream.
+ *
+ * Input:
+ *   state       - sort state
+ *   type,a,b    - operation metadata
+ *   value       - payload for write operations
+ *
+ * Output:
+ *   bool - false if MAX_OPS capacity has been reached
+ **************************************************************************/
 static bool emit_op(SortState *state, OpType type, int a, int b, int value) {
     if (state->ops_count >= MAX_OPS) return false;
     state->ops[state->ops_count++] = (Operation){type, a, b, value};
     return true;
 }
 
+/**************************************************************************
+ * sort_init_state
+ *
+ * Purpose:
+ *   Initialize runtime sort state defaults.
+ *
+ * Input:
+ *   state - sort state to initialize
+ *
+ * Output:
+ *   None
+ **************************************************************************/
 void sort_init_state(SortState *state) {
     memset(state, 0, sizeof(*state));
     state->sound_on = true;
@@ -55,6 +101,19 @@ void sort_init_state(SortState *state) {
     state->run_started_ms = SDL_GetTicks();
 }
 
+/**************************************************************************
+ * sort_shuffle_values
+ *
+ * Purpose:
+ *   Fill bars with ascending values, then Fisher-Yates shuffle and reset
+ *   all execution/celebration cursors.
+ *
+ * Input:
+ *   state - sort state to mutate
+ *
+ * Output:
+ *   None
+ **************************************************************************/
 void sort_shuffle_values(SortState *state) {
     for (int i = 0; i < BAR_COUNT; i++) state->values[i] = i + 1;
     for (int i = BAR_COUNT - 1; i > 0; i--) {
@@ -77,17 +136,58 @@ void sort_shuffle_values(SortState *state) {
     state->celebration_accumulator = 0.0;
 }
 
+/**************************************************************************
+ * sort_set_algorithm
+ *
+ * Purpose:
+ *   Switch active algorithm and immediately reshuffle dataset.
+ *
+ * Input:
+ *   state - sort state
+ *   alg   - new algorithm selection
+ *
+ * Output:
+ *   None
+ **************************************************************************/
 void sort_set_algorithm(SortState *state, Algorithm alg) {
     state->algorithm = alg;
     sort_shuffle_values(state);
 }
 
+/**************************************************************************
+ * sort_set_palette
+ *
+ * Purpose:
+ *   Set active palette index with range clamping.
+ *
+ * Input:
+ *   state         - sort state
+ *   palette_index - requested palette slot
+ *
+ * Output:
+ *   None
+ **************************************************************************/
 void sort_set_palette(SortState *state, int palette_index) {
     if (palette_index < 0) palette_index = 0;
     if (palette_index > 8) palette_index = 8;
     state->palette_index = palette_index;
 }
 
+/**************************************************************************
+ * build_bubble_ops / build_insertion_ops / build_selection_ops
+ * build_quick_ops* / build_merge_ops* / build_heap_ops*
+ *
+ * Purpose:
+ *   Simulate each sorting algorithm against a local array copy while
+ *   recording abstract OP_COMPARE / OP_SWAP / OP_WRITE instructions.
+ *
+ * Input:
+ *   state - sort state for op output
+ *   arr   - mutable local working array
+ *
+ * Output:
+ *   bool - false when op buffer capacity is exhausted
+ **************************************************************************/
 static bool build_bubble_ops(SortState *state, int arr[]) {
     for (int i = 0; i < BAR_COUNT; i++) {
         bool swapped = false;
@@ -239,6 +339,18 @@ static bool build_heap_ops(SortState *state, int arr[]) {
     return true;
 }
 
+/**************************************************************************
+ * sort_build_ops
+ *
+ * Purpose:
+ *   Rebuild the operation stream for the currently selected algorithm.
+ *
+ * Input:
+ *   state - sort state with current values/algorithm
+ *
+ * Output:
+ *   bool - true on success, false if op buffer overflow occurs
+ **************************************************************************/
 bool sort_build_ops(SortState *state) {
     int arr[BAR_COUNT];
     memcpy(arr, state->values, sizeof(arr));
@@ -259,6 +371,7 @@ bool sort_build_ops(SortState *state) {
         default: break;
     }
     if (!ok) return false;
+    /* Derive aggregate op counters for HUD stats. */
     for (int i = 0; i < state->ops_count; i++) {
         if (state->ops[i].type == OP_COMPARE) state->compare_ops++;
         else if (state->ops[i].type == OP_SWAP) state->swap_ops++;
@@ -267,6 +380,19 @@ bool sort_build_ops(SortState *state) {
     return true;
 }
 
+/**************************************************************************
+ * play_event_sound / play_success_chime
+ *
+ * Purpose:
+ *   Emit lightweight sound cues for active operations and end-of-sort.
+ *
+ * Input:
+ *   audio - audio subsystem
+ *   state - sort state (sound enabled/disabled + value context)
+ *
+ * Output:
+ *   None
+ **************************************************************************/
 static void play_event_sound(AudioState *audio, const SortState *state, OpType type, int value) {
     if (!state->sound_on) return;
     float pct = (float)value / (float)BAR_COUNT;
@@ -284,6 +410,19 @@ static void play_success_chime(AudioState *audio, const SortState *state) {
     audio_enqueue_tone(audio, 1046.50f, 0.16f);
 }
 
+/**************************************************************************
+ * sort_execute_step
+ *
+ * Purpose:
+ *   Execute one precomputed operation from the operation stream.
+ *
+ * Input:
+ *   state - sort state
+ *   audio - audio subsystem
+ *
+ * Output:
+ *   None
+ **************************************************************************/
 void sort_execute_step(SortState *state, AudioState *audio) {
     if (!state->running || state->sorted) return;
     if (state->ops_index >= state->ops_count) {
@@ -321,10 +460,25 @@ void sort_execute_step(SortState *state, AudioState *audio) {
     }
 }
 
+/**************************************************************************
+ * sort_run_celebration_step
+ *
+ * Purpose:
+ *   Run post-sort "victory lap" compare pass and schedule auto-restart.
+ *
+ * Input:
+ *   state - sort state
+ *   audio - audio subsystem
+ *   dt    - frame delta time in seconds
+ *
+ * Output:
+ *   None
+ **************************************************************************/
 void sort_run_celebration_step(SortState *state, AudioState *audio, double dt) {
     if (!state->sorted || !state->celebration_active) return;
     state->celebration_accumulator += dt;
     const double verify_interval = 0.010;
+    /* Fixed-step cadence keeps end-of-sort sound tempo stable. */
     while (state->celebration_accumulator >= verify_interval) {
         state->celebration_accumulator -= verify_interval;
         if (state->celebration_index >= BAR_COUNT - 1) {
@@ -349,6 +503,22 @@ void sort_run_celebration_step(SortState *state, AudioState *audio, double dt) {
     }
 }
 
+/**************************************************************************
+ * draw_hud
+ *
+ * Purpose:
+ *   Draw top HUD stats and optional controls/help panel.
+ *
+ * Input:
+ *   renderer             - SDL renderer
+ *   state                - sort state
+ *   width,height         - viewport dimensions
+ *   snake_overlay_active - whether snake PiP is visible
+ *   snake_overlay_bottom - Y edge where help panel must avoid overlap
+ *
+ * Output:
+ *   None
+ **************************************************************************/
 static void draw_hud(
     SDL_Renderer *renderer,
     const SortState *state,
@@ -357,6 +527,7 @@ static void draw_hud(
     bool snake_overlay_active,
     float snake_overlay_bottom
 ) {
+    /* Scale text and panel geometry from a stable reference viewport. */
     float sx = (float)width / 1200.0f;
     float sy = (float)height / 720.0f;
     float ui_scale = sx < sy ? sx : sy;
@@ -444,6 +615,7 @@ static void draw_hud(
     }
     if (panel_y < HELP_PANEL_MARGIN_SCREEN * ui_scale) panel_y = HELP_PANEL_MARGIN_SCREEN * ui_scale;
 
+    /* Compute width from the longest line so future lines auto-fit. */
     size_t longest_len = 0;
     for (int i = 0; i < help_line_count; i++) {
         size_t n = strlen(help_lines[i]);
@@ -476,6 +648,22 @@ static void draw_hud(
     SDL_SetRenderScale(renderer, 1.0f, 1.0f);
 }
 
+/**************************************************************************
+ * sort_draw_scene
+ *
+ * Purpose:
+ *   Draw background, bars, highlights, and HUD for sort mode.
+ *
+ * Input:
+ *   renderer             - SDL renderer
+ *   state                - sort state
+ *   width,height         - viewport dimensions
+ *   snake_overlay_active - whether snake PiP is visible
+ *   snake_overlay_bottom - Y edge where help panel must avoid overlap
+ *
+ * Output:
+ *   None
+ **************************************************************************/
 void sort_draw_scene(
     SDL_Renderer *renderer,
     const SortState *state,
@@ -527,6 +715,19 @@ void sort_draw_scene(
     draw_hud(renderer, state, width, height, snake_overlay_active, snake_overlay_bottom);
 }
 
+/**************************************************************************
+ * sort_update_title
+ *
+ * Purpose:
+ *   Update OS window title with current run status.
+ *
+ * Input:
+ *   window - SDL window handle
+ *   state  - sort state
+ *
+ * Output:
+ *   None
+ **************************************************************************/
 void sort_update_title(SDL_Window *window, const SortState *state) {
     char title[512];
     snprintf(
@@ -542,6 +743,19 @@ void sort_update_title(SDL_Window *window, const SortState *state) {
     SDL_SetWindowTitle(window, title);
 }
 
+/**************************************************************************
+ * sort_handle_start_pause
+ *
+ * Purpose:
+ *   Toggle run state, with sorted-run reset behavior.
+ *
+ * Input:
+ *   state - sort state
+ *   audio - audio subsystem
+ *
+ * Output:
+ *   None
+ **************************************************************************/
 void sort_handle_start_pause(SortState *state, AudioState *audio) {
     if (state->sorted) {
         sort_shuffle_values(state);
@@ -558,11 +772,35 @@ void sort_handle_start_pause(SortState *state, AudioState *audio) {
     if (!state->running) audio_clear(audio);
 }
 
+/**************************************************************************
+ * sort_handle_speed_up
+ *
+ * Purpose:
+ *   Increase simulation speed by reducing per-step interval.
+ *
+ * Input:
+ *   state - sort state
+ *
+ * Output:
+ *   None
+ **************************************************************************/
 void sort_handle_speed_up(SortState *state) {
     state->step_interval -= 0.00025;
     if (state->step_interval < 0.0001) state->step_interval = 0.0001;
 }
 
+/**************************************************************************
+ * sort_handle_speed_down
+ *
+ * Purpose:
+ *   Decrease simulation speed by increasing per-step interval.
+ *
+ * Input:
+ *   state - sort state
+ *
+ * Output:
+ *   None
+ **************************************************************************/
 void sort_handle_speed_down(SortState *state) {
     state->step_interval += 0.00025;
     if (state->step_interval > 0.02) state->step_interval = 0.02;

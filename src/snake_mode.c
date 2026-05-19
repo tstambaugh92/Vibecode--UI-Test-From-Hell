@@ -1,6 +1,27 @@
 #include "snake_mode.h"
 #include <stdlib.h>
 
+/**************************************************************************
+ * FILE: snake_mode.c
+ *
+ * Snake mini-game module. This file implements game-state mutation
+ * (reset, turn, step), food placement, collision checks, and rendering
+ * for both fullscreen snake mode and PiP overlay mode.
+ **************************************************************************/
+
+/**************************************************************************
+ * snake_cell_occupied
+ *
+ * Purpose:
+ *   Test whether a board coordinate is currently occupied by the snake.
+ *
+ * Input:
+ *   snake - snake state
+ *   x, y  - board coordinate
+ *
+ * Output:
+ *   bool - true when occupied
+ **************************************************************************/
 static bool snake_cell_occupied(const SnakeState *snake, int x, int y) {
     for (int i = 0; i < snake->length; i++) {
         if (snake->body[i].x == x && snake->body[i].y == y) return true;
@@ -8,6 +29,19 @@ static bool snake_cell_occupied(const SnakeState *snake, int x, int y) {
     return false;
 }
 
+/**************************************************************************
+ * snake_place_food
+ *
+ * Purpose:
+ *   Place food on a random unoccupied board cell.
+ *
+ * Input:
+ *   snake     - snake state to update
+ *   cols,rows - board dimensions
+ *
+ * Output:
+ *   None
+ **************************************************************************/
 static void snake_place_food(SnakeState *snake, int cols, int rows) {
     if (cols < 2 || rows < 2) return;
     int attempts = 0;
@@ -18,6 +52,19 @@ static void snake_place_food(SnakeState *snake, int cols, int rows) {
     } while (snake_cell_occupied(snake, snake->food_x, snake->food_y) && attempts < 5000);
 }
 
+/**************************************************************************
+ * snake_reset
+ *
+ * Purpose:
+ *   Reinitialize snake state for a fresh round.
+ *
+ * Input:
+ *   snake     - snake state to reset
+ *   cols,rows - board dimensions
+ *
+ * Output:
+ *   None
+ **************************************************************************/
 void snake_reset(SnakeState *snake, int cols, int rows) {
     snake->length = 5;
     snake->dx = 1;
@@ -40,6 +87,19 @@ void snake_reset(SnakeState *snake, int cols, int rows) {
     snake_place_food(snake, cols, rows);
 }
 
+/**************************************************************************
+ * snake_set_direction
+ *
+ * Purpose:
+ *   Queue one valid turn for the next simulation step.
+ *
+ * Input:
+ *   snake - snake state
+ *   dx,dy - desired direction delta
+ *
+ * Output:
+ *   None
+ **************************************************************************/
 void snake_set_direction(SnakeState *snake, int dx, int dy) {
     if (!snake->alive) return;
     if (snake->has_pending_turn) return;
@@ -50,6 +110,19 @@ void snake_set_direction(SnakeState *snake, int dx, int dy) {
     snake->started = true;
 }
 
+/**************************************************************************
+ * snake_step
+ *
+ * Purpose:
+ *   Advance snake simulation by one cell movement tick.
+ *
+ * Input:
+ *   snake     - mutable snake state
+ *   cols,rows - board dimensions
+ *
+ * Output:
+ *   None
+ **************************************************************************/
 void snake_step(SnakeState *snake, int cols, int rows) {
     if (!snake->alive || !snake->started) return;
 
@@ -83,6 +156,7 @@ void snake_step(SnakeState *snake, int cols, int rows) {
         if (snake->move_interval < 0.040) snake->move_interval = 0.040;
     }
 
+    /* Shift body tail-to-head before writing the new head position. */
     for (int i = snake->length - 1; i > 0; i--) {
         snake->body[i] = snake->body[i - 1];
     }
@@ -92,6 +166,24 @@ void snake_step(SnakeState *snake, int cols, int rows) {
     if (ate) snake_place_food(snake, cols, rows);
 }
 
+/**************************************************************************
+ * draw_snake_board
+ *
+ * Purpose:
+ *   Shared renderer for snake board visuals (fullscreen and PiP).
+ *
+ * Input:
+ *   renderer    - SDL renderer
+ *   snake       - snake state
+ *   width,height- viewport dimensions
+ *   origin_x/y  - board origin in pixels
+ *   board_w/h   - board size in pixels
+ *   with_panel  - whether to draw backing panel
+ *   show_text   - whether to draw snake help/status text
+ *
+ * Output:
+ *   None
+ **************************************************************************/
 static void draw_snake_board(
     SDL_Renderer *renderer,
     const SnakeState *snake,
@@ -176,6 +268,20 @@ static void draw_snake_board(
     }
 }
 
+/**************************************************************************
+ * snake_draw_scene
+ *
+ * Purpose:
+ *   Draw full-screen snake mode.
+ *
+ * Input:
+ *   renderer    - SDL renderer
+ *   snake       - snake state
+ *   width,height- viewport dimensions
+ *
+ * Output:
+ *   None
+ **************************************************************************/
 void snake_draw_scene(SDL_Renderer *renderer, const SnakeState *snake, int width, int height) {
     SDL_SetRenderDrawColor(renderer, 8, 16, 12, 255);
     SDL_RenderClear(renderer);
@@ -187,6 +293,21 @@ void snake_draw_scene(SDL_Renderer *renderer, const SnakeState *snake, int width
     draw_snake_board(renderer, snake, width, height, origin_x, origin_y, board_w, board_h, false, true);
 }
 
+/**************************************************************************
+ * snake_draw_overlay
+ *
+ * Purpose:
+ *   Draw snake as a PiP overlay window while sort mode is active.
+ *
+ * Input:
+ *   renderer    - SDL renderer
+ *   snake       - snake state
+ *   width,height- viewport dimensions
+ *   top_y       - top edge of PiP board
+ *
+ * Output:
+ *   None
+ **************************************************************************/
 void snake_draw_overlay(SDL_Renderer *renderer, const SnakeState *snake, int width, int height, float top_y) {
     float board_w = (float)width * 0.33f;
     float board_h = (float)height * 0.30f;

@@ -5,6 +5,9 @@
 #include <stdbool.h>
 #include "audio.h"
 
+/**************************************************************************
+ * STRUCTS
+ **************************************************************************/
 typedef enum {
     ALG_BUBBLE = 0,
     ALG_INSERTION = 1,
@@ -56,6 +59,9 @@ typedef struct {
     bool animated_bg_on;
 } SortState;
 
+/**************************************************************************
+ * PROTOTYPES
+ **************************************************************************/
 const char *sort_algorithm_name(Algorithm alg);
 void sort_init_state(SortState *state);
 void sort_set_algorithm(SortState *state, Algorithm alg);

@@ -7,6 +7,26 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+/**************************************************************************
+ * FILE: audio.c
+ *
+ * Audio helper module for simple synthesized tone playback. This module
+ * wraps SDL audio stream setup/teardown and provides a short-envelope
+ * sine tone queueing function used by sort/snake feedback.
+ **************************************************************************/
+
+/**************************************************************************
+ * audio_init
+ *
+ * Purpose:
+ *   Create and start an SDL playback stream for mono float audio.
+ *
+ * Input:
+ *   audio - pointer to audio state to initialize
+ *
+ * Output:
+ *   bool - true when stream is ready, false on failure
+ **************************************************************************/
 bool audio_init(AudioState *audio) {
     SDL_AudioSpec spec = {0};
     spec.format = SDL_AUDIO_F32;
@@ -29,6 +49,18 @@ bool audio_init(AudioState *audio) {
     return true;
 }
 
+/**************************************************************************
+ * audio_shutdown
+ *
+ * Purpose:
+ *   Destroy the SDL audio stream and reset readiness state.
+ *
+ * Input:
+ *   audio - pointer to audio state
+ *
+ * Output:
+ *   None
+ **************************************************************************/
 void audio_shutdown(AudioState *audio) {
     if (audio->stream) {
         SDL_DestroyAudioStream(audio->stream);
@@ -37,12 +69,38 @@ void audio_shutdown(AudioState *audio) {
     audio->ready = false;
 }
 
+/**************************************************************************
+ * audio_clear
+ *
+ * Purpose:
+ *   Drop queued audio to stop pending tones immediately.
+ *
+ * Input:
+ *   audio - pointer to audio state
+ *
+ * Output:
+ *   None
+ **************************************************************************/
 void audio_clear(AudioState *audio) {
     if (audio->stream) {
         SDL_ClearAudioStream(audio->stream);
     }
 }
 
+/**************************************************************************
+ * audio_enqueue_tone
+ *
+ * Purpose:
+ *   Synthesize and enqueue a short sine tone with fade-in/fade-out.
+ *
+ * Input:
+ *   audio   - pointer to audio state
+ *   freq_hz - tone frequency in Hz
+ *   gain    - linear amplitude multiplier
+ *
+ * Output:
+ *   None
+ **************************************************************************/
 void audio_enqueue_tone(AudioState *audio, float freq_hz, float gain) {
     if (!audio->ready || !audio->stream) return;
     if (SDL_GetAudioStreamQueued(audio->stream) > AUDIO_MAX_QUEUED_BYTES) return;
@@ -53,6 +111,7 @@ void audio_enqueue_tone(AudioState *audio, float freq_hz, float gain) {
         samples = (int)(sizeof(buffer) / sizeof(buffer[0]));
     }
 
+    /* Keep phase continuous to avoid clicks between adjacent tones. */
     static float phase = 0.0f;
     float step = (2.0f * (float)M_PI * freq_hz) / (float)AUDIO_SAMPLE_RATE;
     int fade = samples / 6;

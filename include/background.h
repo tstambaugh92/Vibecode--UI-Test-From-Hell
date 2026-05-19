@@ -3,6 +3,9 @@
 
 #include <SDL3/SDL.h>
 
+/**************************************************************************
+ * STRUCTS
+ **************************************************************************/
 typedef struct {
     Uint8 normal_r;
     Uint8 normal_g;
@@ -12,6 +15,9 @@ typedef struct {
     Uint8 active_b;
 } BackgroundPalette;
 
+/**************************************************************************
+ * PROTOTYPES
+ **************************************************************************/
 void background_draw_animated(
     SDL_Renderer *renderer,
     int width,

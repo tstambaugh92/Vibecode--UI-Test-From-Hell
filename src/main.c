@@ -9,11 +9,36 @@
 #include "snake_mode.h"
 #include "sort_mode.h"
 
+/**************************************************************************
+ * FILE: main.c
+ *
+ * This is the main runtime controller for the application. It initializes
+ * SDL systems, owns the app mode state machine (sort mode, snake mode,
+ * and snake PiP overlay), routes keyboard input, and runs the per-frame
+ * update/render loop.
+ **************************************************************************/
+
 typedef enum {
     MODE_SORT = 0,
     MODE_SNAKE = 1
 } AppMode;
 
+/**************************************************************************
+ * handle_sort_key
+ *
+ * Purpose:
+ *   Handle all sort-mode hotkeys and perform immediate state updates.
+ *
+ * Input:
+ *   key           - SDL key code for this key press
+ *   sort          - active sort state
+ *   audio         - audio engine state
+ *   is_fullscreen - pointer to fullscreen toggle flag
+ *   window        - SDL window handle
+ *
+ * Output:
+ *   None (state is modified in-place through pointers).
+ **************************************************************************/
 static void handle_sort_key(
     SDL_Keycode key,
     SortState *sort,
@@ -99,6 +124,19 @@ static void handle_sort_key(
     }
 }
 
+/**************************************************************************
+ * main
+ *
+ * Purpose:
+ *   Program entry point. Initializes subsystems, runs the event/update/
+ *   render loop, and performs shutdown.
+ *
+ * Input:
+ *   None
+ *
+ * Output:
+ *   int - process exit code (0 success, non-zero failure)
+ **************************************************************************/
 int main(void) {
     srand((unsigned int)time(NULL));
 
@@ -168,6 +206,7 @@ int main(void) {
                 }
 
                 if (mode == MODE_SNAKE) {
+                    /* Full snake mode consumes movement keys and mode toggles. */
                     if (key == SDLK_TAB) {
                         mode = MODE_SORT;
                         snake_overlay = true;
@@ -200,6 +239,7 @@ int main(void) {
                 }
 
                 if (snake_overlay) {
+                    /* PiP snake still receives arrow/space/x controls. */
                     if (key == SDLK_X) {
                         snake_overlay = false;
                         snake.started = false;
@@ -227,6 +267,7 @@ int main(void) {
                 char c = 0;
                 if (key >= SDLK_A && key <= SDLK_Z) c = (char)('A' + (key - SDLK_A));
                 if (c != 0) {
+                    /* Incremental secret-code matcher for S N A K E activation. */
                     if (c == cheat[cheat_index]) {
                         cheat_index++;
                         if (cheat[cheat_index] == '\0') {
@@ -252,6 +293,7 @@ int main(void) {
         last_ticks = now;
 
         if (mode == MODE_SNAKE) {
+            /* Standalone snake frame: update snake and draw only snake scene. */
             snake.accumulator += dt;
             while (snake.accumulator >= snake.move_interval) {
                 snake.accumulator -= snake.move_interval;
@@ -282,6 +324,7 @@ int main(void) {
         sort_run_celebration_step(&sort, &audio, dt);
 
         if (sort.auto_restart_pending) {
+            /* Auto-loop behavior: brief delay after celebration, then reshuffle. */
             Uint64 now_ms = SDL_GetTicks();
             if (now_ms >= sort.auto_restart_at_ms) {
                 sort.auto_restart_pending = false;

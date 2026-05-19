@@ -4,6 +4,9 @@
 #include <SDL3/SDL.h>
 #include <stdbool.h>
 
+/**************************************************************************
+ * STRUCTS
+ **************************************************************************/
 typedef struct {
     int x;
     int y;
@@ -26,6 +29,9 @@ typedef struct {
     double accumulator;
 } SnakeState;
 
+/**************************************************************************
+ * PROTOTYPES
+ **************************************************************************/
 void snake_reset(SnakeState *snake, int cols, int rows);
 void snake_set_direction(SnakeState *snake, int dx, int dy);
 void snake_step(SnakeState *snake, int cols, int rows);
