@@ -138,75 +138,105 @@ static void handle_sort_key(
     SDL_Window *window
 ) {
     bool should_autostart = false;
-    if (key == SDLK_F || key == SDLK_F11) {
-        *is_fullscreen = !(*is_fullscreen);
-        SDL_SetWindowFullscreen(window, *is_fullscreen);
-    } else if (key == SDLK_1) {
-        sort_set_algorithm(sort, ALG_BUBBLE);
-        sort_build_ops(sort);
-        audio_clear(audio);
-        should_autostart = true;
-    } else if (key == SDLK_2) {
-        sort_set_algorithm(sort, ALG_INSERTION);
-        sort_build_ops(sort);
-        audio_clear(audio);
-        should_autostart = true;
-    } else if (key == SDLK_3) {
-        sort_set_algorithm(sort, ALG_SELECTION);
-        sort_build_ops(sort);
-        audio_clear(audio);
-        should_autostart = true;
-    } else if (key == SDLK_4) {
-        sort_set_algorithm(sort, ALG_QUICK);
-        sort_build_ops(sort);
-        audio_clear(audio);
-        should_autostart = true;
-    } else if (key == SDLK_5) {
-        sort_set_algorithm(sort, ALG_MERGE);
-        sort_build_ops(sort);
-        audio_clear(audio);
-        should_autostart = true;
-    } else if (key == SDLK_6) {
-        sort_set_algorithm(sort, ALG_HEAP);
-        sort_build_ops(sort);
-        audio_clear(audio);
-        should_autostart = true;
-    } else if (key == SDLK_R) {
-        sort_shuffle_values(sort);
-        sort_build_ops(sort);
-        audio_clear(audio);
-        should_autostart = true;
-    } else if (key == SDLK_H) {
-        sort->show_help = !sort->show_help;
-    } else if (key == SDLK_B) {
-        sort->animated_bg_on = !sort->animated_bg_on;
-    } else if (key == SDLK_KP_1) {
-        sort_set_palette(sort, 0);
-    } else if (key == SDLK_KP_2) {
-        sort_set_palette(sort, 1);
-    } else if (key == SDLK_KP_3) {
-        sort_set_palette(sort, 2);
-    } else if (key == SDLK_KP_4) {
-        sort_set_palette(sort, 3);
-    } else if (key == SDLK_KP_5) {
-        sort_set_palette(sort, 4);
-    } else if (key == SDLK_KP_6) {
-        sort_set_palette(sort, 5);
-    } else if (key == SDLK_KP_7) {
-        sort_set_palette(sort, 6);
-    } else if (key == SDLK_KP_8) {
-        sort_set_palette(sort, 7);
-    } else if (key == SDLK_KP_9) {
-        sort_set_palette(sort, 8);
-    } else if (key == SDLK_M) {
-        sort->sound_on = !sort->sound_on;
-        if (!sort->sound_on) audio_clear(audio);
-    } else if (key == SDLK_EQUALS || key == SDLK_PLUS || key == SDLK_KP_PLUS) {
-        sort_handle_speed_up(sort);
-    } else if (key == SDLK_MINUS || key == SDLK_KP_MINUS) {
-        sort_handle_speed_down(sort);
-    } else if (key == SDLK_S) {
-        sort_handle_start_pause(sort, audio);
+    switch (key) {
+        case SDLK_F:
+        case SDLK_F11:
+            *is_fullscreen = !(*is_fullscreen);
+            SDL_SetWindowFullscreen(window, *is_fullscreen);
+            break;
+        case SDLK_1:
+            sort_set_algorithm(sort, ALG_BUBBLE);
+            sort_build_ops(sort);
+            audio_clear(audio);
+            should_autostart = true;
+            break;
+        case SDLK_2:
+            sort_set_algorithm(sort, ALG_INSERTION);
+            sort_build_ops(sort);
+            audio_clear(audio);
+            should_autostart = true;
+            break;
+        case SDLK_3:
+            sort_set_algorithm(sort, ALG_SELECTION);
+            sort_build_ops(sort);
+            audio_clear(audio);
+            should_autostart = true;
+            break;
+        case SDLK_4:
+            sort_set_algorithm(sort, ALG_QUICK);
+            sort_build_ops(sort);
+            audio_clear(audio);
+            should_autostart = true;
+            break;
+        case SDLK_5:
+            sort_set_algorithm(sort, ALG_MERGE);
+            sort_build_ops(sort);
+            audio_clear(audio);
+            should_autostart = true;
+            break;
+        case SDLK_6:
+            sort_set_algorithm(sort, ALG_HEAP);
+            sort_build_ops(sort);
+            audio_clear(audio);
+            should_autostart = true;
+            break;
+        case SDLK_R:
+            sort_shuffle_values(sort);
+            sort_build_ops(sort);
+            audio_clear(audio);
+            should_autostart = true;
+            break;
+        case SDLK_H:
+            sort->show_help = !sort->show_help;
+            break;
+        case SDLK_B:
+            sort->animated_bg_on = !sort->animated_bg_on;
+            break;
+        case SDLK_KP_1:
+            sort_set_palette(sort, 0);
+            break;
+        case SDLK_KP_2:
+            sort_set_palette(sort, 1);
+            break;
+        case SDLK_KP_3:
+            sort_set_palette(sort, 2);
+            break;
+        case SDLK_KP_4:
+            sort_set_palette(sort, 3);
+            break;
+        case SDLK_KP_5:
+            sort_set_palette(sort, 4);
+            break;
+        case SDLK_KP_6:
+            sort_set_palette(sort, 5);
+            break;
+        case SDLK_KP_7:
+            sort_set_palette(sort, 6);
+            break;
+        case SDLK_KP_8:
+            sort_set_palette(sort, 7);
+            break;
+        case SDLK_KP_9:
+            sort_set_palette(sort, 8);
+            break;
+        case SDLK_M:
+            sort->sound_on = !sort->sound_on;
+            if (!sort->sound_on) audio_clear(audio);
+            break;
+        case SDLK_EQUALS:
+        case SDLK_PLUS:
+        case SDLK_KP_PLUS:
+            sort_handle_speed_up(sort);
+            break;
+        case SDLK_MINUS:
+        case SDLK_KP_MINUS:
+            sort_handle_speed_down(sort);
+            break;
+        case SDLK_S:
+            sort_handle_start_pause(sort, audio);
+            break;
+        default:
+            break;
     }
 
     if (should_autostart) {
@@ -229,27 +259,41 @@ static void handle_sort_key(
  *   None
  **************************************************************************/
 static void handle_snake_mode_key(SDL_Keycode key, InputContext *ctx) {
-    if (key == SDLK_TAB) {
-        *ctx->mode = MODE_SORT;
-        *ctx->snake_overlay = true;
-        ctx->sort->running = true;
-        sort_update_title(ctx->window, ctx->sort);
-    } else if (key == SDLK_X) {
-        *ctx->mode = MODE_SORT;
-        *ctx->snake_overlay = false;
-        ctx->snake->started = false;
-        ctx->sort->running = true;
-        sort_update_title(ctx->window, ctx->sort);
-    } else if (key == SDLK_SPACE) {
-        snake_reset(ctx->snake, ctx->snake_cols, ctx->snake_rows);
-    } else if (key == SDLK_UP || key == SDLK_W) {
-        snake_set_direction(ctx->snake, 0, -1);
-    } else if (key == SDLK_DOWN || key == SDLK_S) {
-        snake_set_direction(ctx->snake, 0, 1);
-    } else if (key == SDLK_LEFT || key == SDLK_A) {
-        snake_set_direction(ctx->snake, -1, 0);
-    } else if (key == SDLK_RIGHT || key == SDLK_D) {
-        snake_set_direction(ctx->snake, 1, 0);
+    switch (key) {
+        case SDLK_TAB:
+            *ctx->mode = MODE_SORT;
+            *ctx->snake_overlay = true;
+            ctx->sort->running = true;
+            sort_update_title(ctx->window, ctx->sort);
+            break;
+        case SDLK_X:
+            *ctx->mode = MODE_SORT;
+            *ctx->snake_overlay = false;
+            ctx->snake->started = false;
+            ctx->sort->running = true;
+            sort_update_title(ctx->window, ctx->sort);
+            break;
+        case SDLK_SPACE:
+            snake_reset(ctx->snake, ctx->snake_cols, ctx->snake_rows);
+            break;
+        case SDLK_UP:
+        case SDLK_W:
+            snake_set_direction(ctx->snake, 0, -1);
+            break;
+        case SDLK_DOWN:
+        case SDLK_S:
+            snake_set_direction(ctx->snake, 0, 1);
+            break;
+        case SDLK_LEFT:
+        case SDLK_A:
+            snake_set_direction(ctx->snake, -1, 0);
+            break;
+        case SDLK_RIGHT:
+        case SDLK_D:
+            snake_set_direction(ctx->snake, 1, 0);
+            break;
+        default:
+            break;
     }
 }
 
@@ -267,32 +311,29 @@ static void handle_snake_mode_key(SDL_Keycode key, InputContext *ctx) {
  *   bool - true if key was consumed by overlay controls
  **************************************************************************/
 static bool handle_snake_overlay_key(SDL_Keycode key, InputContext *ctx) {
-    if (key == SDLK_X) {
-        *ctx->snake_overlay = false;
-        ctx->snake->started = false;
-        return true;
+    switch (key) {
+        case SDLK_X:
+            *ctx->snake_overlay = false;
+            ctx->snake->started = false;
+            return true;
+        case SDLK_SPACE:
+            snake_reset(ctx->snake, ctx->snake_cols, ctx->snake_rows);
+            return true;
+        case SDLK_UP:
+            snake_set_direction(ctx->snake, 0, -1);
+            return true;
+        case SDLK_DOWN:
+            snake_set_direction(ctx->snake, 0, 1);
+            return true;
+        case SDLK_LEFT:
+            snake_set_direction(ctx->snake, -1, 0);
+            return true;
+        case SDLK_RIGHT:
+            snake_set_direction(ctx->snake, 1, 0);
+            return true;
+        default:
+            return false;
     }
-    if (key == SDLK_SPACE) {
-        snake_reset(ctx->snake, ctx->snake_cols, ctx->snake_rows);
-        return true;
-    }
-    if (key == SDLK_UP) {
-        snake_set_direction(ctx->snake, 0, -1);
-        return true;
-    }
-    if (key == SDLK_DOWN) {
-        snake_set_direction(ctx->snake, 0, 1);
-        return true;
-    }
-    if (key == SDLK_LEFT) {
-        snake_set_direction(ctx->snake, -1, 0);
-        return true;
-    }
-    if (key == SDLK_RIGHT) {
-        snake_set_direction(ctx->snake, 1, 0);
-        return true;
-    }
-    return false;
 }
 
 /**************************************************************************
