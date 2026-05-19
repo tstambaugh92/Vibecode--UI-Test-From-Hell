@@ -1,3 +1,7 @@
 # Build outputs
 bin/
 .build/
+
+# Downloaded local tools
+tools/appimage/
+packaging/
