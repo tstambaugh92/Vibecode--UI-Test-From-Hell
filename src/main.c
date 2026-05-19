@@ -23,6 +23,97 @@ typedef enum {
     MODE_SNAKE = 1
 } AppMode;
 
+typedef struct {
+    SortState *sort;
+    SnakeState *snake;
+    AudioState *audio;
+    AppMode *mode;
+    bool *snake_overlay;
+    bool *is_fullscreen;
+    SDL_Window *window;
+    int snake_cols;
+    int snake_rows;
+    const char *cheat;
+    int *cheat_index;
+} InputContext;
+
+/**************************************************************************
+ * initialize_sdl_systems
+ *
+ * Purpose:
+ *   Initialize SDL core, create the main window/renderer, and initialize
+ *   the audio stream.
+ *
+ * Input:
+ *   window_out   - receives created SDL_Window*
+ *   renderer_out - receives created SDL_Renderer*
+ *   audio_out    - receives initialized audio state
+ *
+ * Output:
+ *   bool - true on successful video setup (audio may still be disabled)
+ **************************************************************************/
+static bool initialize_sdl_systems(
+    SDL_Window **window_out,
+    SDL_Renderer **renderer_out,
+    AudioState *audio_out
+) {
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
+        fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
+        return false;
+    }
+
+    SDL_Window *window = SDL_CreateWindow(
+        "Vibecode: UI Test From Hell",
+        WINDOW_WIDTH,
+        WINDOW_HEIGHT,
+        SDL_WINDOW_RESIZABLE
+    );
+    if (!window) {
+        fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
+        SDL_Quit();
+        return false;
+    }
+
+    SDL_Renderer *renderer = SDL_CreateRenderer(window, NULL);
+    if (!renderer) {
+        fprintf(stderr, "SDL_CreateRenderer failed: %s\n", SDL_GetError());
+        SDL_DestroyWindow(window);
+        SDL_Quit();
+        return false;
+    }
+    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+
+    *audio_out = (AudioState){0};
+    if (!audio_init(audio_out)) {
+        fprintf(stderr, "Audio disabled: %s\n", SDL_GetError());
+    }
+
+    *window_out = window;
+    *renderer_out = renderer;
+    return true;
+}
+
+/**************************************************************************
+ * shutdown_sdl_systems
+ *
+ * Purpose:
+ *   Tear down audio and SDL rendering/window resources.
+ *
+ * Input:
+ *   window   - SDL window
+ *   renderer - SDL renderer
+ *   audio    - audio state
+ *
+ * Output:
+ *   None
+ **************************************************************************/
+static void shutdown_sdl_systems(SDL_Window *window, SDL_Renderer *renderer, AudioState *audio) {
+    audio_shutdown(audio);
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+}
+
 /**************************************************************************
  * handle_sort_key
  *
@@ -125,6 +216,191 @@ static void handle_sort_key(
 }
 
 /**************************************************************************
+ * handle_snake_mode_key
+ *
+ * Purpose:
+ *   Handle key input while running full-screen snake mode.
+ *
+ * Input:
+ *   key - key pressed
+ *   ctx - shared input context
+ *
+ * Output:
+ *   None
+ **************************************************************************/
+static void handle_snake_mode_key(SDL_Keycode key, InputContext *ctx) {
+    if (key == SDLK_TAB) {
+        *ctx->mode = MODE_SORT;
+        *ctx->snake_overlay = true;
+        ctx->sort->running = true;
+        sort_update_title(ctx->window, ctx->sort);
+    } else if (key == SDLK_X) {
+        *ctx->mode = MODE_SORT;
+        *ctx->snake_overlay = false;
+        ctx->snake->started = false;
+        ctx->sort->running = true;
+        sort_update_title(ctx->window, ctx->sort);
+    } else if (key == SDLK_SPACE) {
+        snake_reset(ctx->snake, ctx->snake_cols, ctx->snake_rows);
+    } else if (key == SDLK_UP || key == SDLK_W) {
+        snake_set_direction(ctx->snake, 0, -1);
+    } else if (key == SDLK_DOWN || key == SDLK_S) {
+        snake_set_direction(ctx->snake, 0, 1);
+    } else if (key == SDLK_LEFT || key == SDLK_A) {
+        snake_set_direction(ctx->snake, -1, 0);
+    } else if (key == SDLK_RIGHT || key == SDLK_D) {
+        snake_set_direction(ctx->snake, 1, 0);
+    }
+}
+
+/**************************************************************************
+ * handle_snake_overlay_key
+ *
+ * Purpose:
+ *   Handle PiP snake controls while sort mode remains active.
+ *
+ * Input:
+ *   key - key pressed
+ *   ctx - shared input context
+ *
+ * Output:
+ *   bool - true if key was consumed by overlay controls
+ **************************************************************************/
+static bool handle_snake_overlay_key(SDL_Keycode key, InputContext *ctx) {
+    if (key == SDLK_X) {
+        *ctx->snake_overlay = false;
+        ctx->snake->started = false;
+        return true;
+    }
+    if (key == SDLK_SPACE) {
+        snake_reset(ctx->snake, ctx->snake_cols, ctx->snake_rows);
+        return true;
+    }
+    if (key == SDLK_UP) {
+        snake_set_direction(ctx->snake, 0, -1);
+        return true;
+    }
+    if (key == SDLK_DOWN) {
+        snake_set_direction(ctx->snake, 0, 1);
+        return true;
+    }
+    if (key == SDLK_LEFT) {
+        snake_set_direction(ctx->snake, -1, 0);
+        return true;
+    }
+    if (key == SDLK_RIGHT) {
+        snake_set_direction(ctx->snake, 1, 0);
+        return true;
+    }
+    return false;
+}
+
+/**************************************************************************
+ * update_cheat_code
+ *
+ * Purpose:
+ *   Incrementally match S N A K E and switch to snake mode when complete.
+ *
+ * Input:
+ *   key - key pressed
+ *   ctx - shared input context
+ *
+ * Output:
+ *   None
+ **************************************************************************/
+static void update_cheat_code(SDL_Keycode key, InputContext *ctx) {
+    char c = 0;
+    if (key >= SDLK_A && key <= SDLK_Z) c = (char)('A' + (key - SDLK_A));
+    if (c != 0) {
+        if (c == ctx->cheat[*ctx->cheat_index]) {
+            (*ctx->cheat_index)++;
+            if (ctx->cheat[*ctx->cheat_index] == '\0') {
+                *ctx->mode = MODE_SNAKE;
+                *ctx->snake_overlay = false;
+                snake_reset(ctx->snake, ctx->snake_cols, ctx->snake_rows);
+                audio_clear(ctx->audio);
+                *ctx->cheat_index = 0;
+            }
+        } else {
+            *ctx->cheat_index = (c == ctx->cheat[0]) ? 1 : 0;
+        }
+    } else {
+        *ctx->cheat_index = 0;
+    }
+}
+
+/**************************************************************************
+ * process_events
+ *
+ * Purpose:
+ *   Poll and process all pending SDL events for this frame.
+ *
+ * Input:
+ *   ctx  - shared input context
+ *   quit - set true when app should terminate
+ *
+ * Output:
+ *   None
+ **************************************************************************/
+static void process_events(InputContext *ctx, bool *quit) {
+    SDL_Event event;
+    while (SDL_PollEvent(&event)) {
+        if (event.type == SDL_EVENT_QUIT) {
+            *quit = true;
+            continue;
+        }
+        if (event.type != SDL_EVENT_KEY_DOWN) continue;
+
+        SDL_Keycode key = event.key.key;
+        if (key == SDLK_ESCAPE) {
+            *quit = true;
+            continue;
+        }
+
+        if (*ctx->mode == MODE_SNAKE) {
+            handle_snake_mode_key(key, ctx);
+            continue;
+        }
+
+        if (key == SDLK_TAB && *ctx->snake_overlay) {
+            *ctx->mode = MODE_SNAKE;
+            *ctx->snake_overlay = false;
+            continue;
+        }
+
+        if (*ctx->snake_overlay && handle_snake_overlay_key(key, ctx)) {
+            continue;
+        }
+
+        handle_sort_key(key, ctx->sort, ctx->audio, ctx->is_fullscreen, ctx->window);
+        update_cheat_code(key, ctx);
+        sort_update_title(ctx->window, ctx->sort);
+    }
+}
+
+/**************************************************************************
+ * step_snake
+ *
+ * Purpose:
+ *   Advance snake simulation using accumulator/fixed-step logic.
+ *
+ * Input:
+ *   snake     - snake state
+ *   dt        - frame delta time
+ *   snake_cols, snake_rows - board dimensions
+ *
+ * Output:
+ *   None
+ **************************************************************************/
+static void step_snake(SnakeState *snake, double dt, int snake_cols, int snake_rows) {
+    snake->accumulator += dt;
+    while (snake->accumulator >= snake->move_interval) {
+        snake->accumulator -= snake->move_interval;
+        snake_step(snake, snake_cols, snake_rows);
+    }
+}
+
+/**************************************************************************
  * main
  *
  * Purpose:
@@ -140,35 +416,11 @@ static void handle_sort_key(
 int main(void) {
     srand((unsigned int)time(NULL));
 
-    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO)) {
-        fprintf(stderr, "SDL_Init failed: %s\n", SDL_GetError());
-        return 1;
-    }
-
-    SDL_Window *window = SDL_CreateWindow(
-        "Vibecode: UI Test From Hell",
-        WINDOW_WIDTH,
-        WINDOW_HEIGHT,
-        SDL_WINDOW_RESIZABLE
-    );
-    if (!window) {
-        fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
-        SDL_Quit();
-        return 1;
-    }
-
-    SDL_Renderer *renderer = SDL_CreateRenderer(window, NULL);
-    if (!renderer) {
-        fprintf(stderr, "SDL_CreateRenderer failed: %s\n", SDL_GetError());
-        SDL_DestroyWindow(window);
-        SDL_Quit();
-        return 1;
-    }
-    SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
-
+    SDL_Window *window = NULL;
+    SDL_Renderer *renderer = NULL;
     AudioState audio = {0};
-    if (!audio_init(&audio)) {
-        fprintf(stderr, "Audio disabled: %s\n", SDL_GetError());
+    if (!initialize_sdl_systems(&window, &renderer, &audio)) {
+        return 1;
     }
 
     SortState sort = {0};
@@ -194,111 +446,27 @@ int main(void) {
     double acc = 0.0;
 
     while (!quit) {
-        SDL_Event event;
-        while (SDL_PollEvent(&event)) {
-            if (event.type == SDL_EVENT_QUIT) {
-                quit = true;
-            } else if (event.type == SDL_EVENT_KEY_DOWN) {
-                SDL_Keycode key = event.key.key;
-                if (key == SDLK_ESCAPE) {
-                    quit = true;
-                    continue;
-                }
-
-                if (mode == MODE_SNAKE) {
-                    /* Full snake mode consumes movement keys and mode toggles. */
-                    if (key == SDLK_TAB) {
-                        mode = MODE_SORT;
-                        snake_overlay = true;
-                        sort.running = true;
-                        sort_update_title(window, &sort);
-                    } else if (key == SDLK_X) {
-                        mode = MODE_SORT;
-                        snake_overlay = false;
-                        snake.started = false;
-                        sort.running = true;
-                        sort_update_title(window, &sort);
-                    } else if (key == SDLK_SPACE) {
-                        snake_reset(&snake, snake_cols, snake_rows);
-                    } else if (key == SDLK_UP || key == SDLK_W) {
-                        snake_set_direction(&snake, 0, -1);
-                    } else if (key == SDLK_DOWN || key == SDLK_S) {
-                        snake_set_direction(&snake, 0, 1);
-                    } else if (key == SDLK_LEFT || key == SDLK_A) {
-                        snake_set_direction(&snake, -1, 0);
-                    } else if (key == SDLK_RIGHT || key == SDLK_D) {
-                        snake_set_direction(&snake, 1, 0);
-                    }
-                    continue;
-                }
-
-                if (key == SDLK_TAB && snake_overlay) {
-                    mode = MODE_SNAKE;
-                    snake_overlay = false;
-                    continue;
-                }
-
-                if (snake_overlay) {
-                    /* PiP snake still receives arrow/space/x controls. */
-                    if (key == SDLK_X) {
-                        snake_overlay = false;
-                        snake.started = false;
-                        continue;
-                    } else if (key == SDLK_SPACE) {
-                        snake_reset(&snake, snake_cols, snake_rows);
-                        continue;
-                    } else if (key == SDLK_UP) {
-                        snake_set_direction(&snake, 0, -1);
-                        continue;
-                    } else if (key == SDLK_DOWN) {
-                        snake_set_direction(&snake, 0, 1);
-                        continue;
-                    } else if (key == SDLK_LEFT) {
-                        snake_set_direction(&snake, -1, 0);
-                        continue;
-                    } else if (key == SDLK_RIGHT) {
-                        snake_set_direction(&snake, 1, 0);
-                        continue;
-                    }
-                }
-
-                handle_sort_key(key, &sort, &audio, &is_fullscreen, window);
-
-                char c = 0;
-                if (key >= SDLK_A && key <= SDLK_Z) c = (char)('A' + (key - SDLK_A));
-                if (c != 0) {
-                    /* Incremental secret-code matcher for S N A K E activation. */
-                    if (c == cheat[cheat_index]) {
-                        cheat_index++;
-                        if (cheat[cheat_index] == '\0') {
-                            mode = MODE_SNAKE;
-                            snake_overlay = false;
-                            snake_reset(&snake, snake_cols, snake_rows);
-                            audio_clear(&audio);
-                            cheat_index = 0;
-                        }
-                    } else {
-                        cheat_index = (c == cheat[0]) ? 1 : 0;
-                    }
-                } else {
-                    cheat_index = 0;
-                }
-
-                sort_update_title(window, &sort);
-            }
-        }
+        InputContext input_ctx = {
+            .sort = &sort,
+            .snake = &snake,
+            .audio = &audio,
+            .mode = &mode,
+            .snake_overlay = &snake_overlay,
+            .is_fullscreen = &is_fullscreen,
+            .window = window,
+            .snake_cols = snake_cols,
+            .snake_rows = snake_rows,
+            .cheat = cheat,
+            .cheat_index = &cheat_index
+        };
+        process_events(&input_ctx, &quit);
 
         Uint64 now = SDL_GetTicks();
         double dt = (double)(now - last_ticks) / 1000.0;
         last_ticks = now;
 
         if (mode == MODE_SNAKE) {
-            /* Standalone snake frame: update snake and draw only snake scene. */
-            snake.accumulator += dt;
-            while (snake.accumulator >= snake.move_interval) {
-                snake.accumulator -= snake.move_interval;
-                snake_step(&snake, snake_cols, snake_rows);
-            }
+            step_snake(&snake, dt, snake_cols, snake_rows);
             int w = WINDOW_WIDTH;
             int h = WINDOW_HEIGHT;
             SDL_GetWindowSize(window, &w, &h);
@@ -349,11 +517,7 @@ int main(void) {
 
         sort_draw_scene(renderer, &sort, w, h, snake_overlay, snake_overlay_bottom);
         if (snake_overlay) {
-            snake.accumulator += dt;
-            while (snake.accumulator >= snake.move_interval) {
-                snake.accumulator -= snake.move_interval;
-                snake_step(&snake, snake_cols, snake_rows);
-            }
+            step_snake(&snake, dt, snake_cols, snake_rows);
             snake_draw_overlay(renderer, &snake, w, h, snake_overlay_top);
         }
         SDL_RenderPresent(renderer);
@@ -361,9 +525,6 @@ int main(void) {
         SDL_Delay(1);
     }
 
-    audio_shutdown(&audio);
-    SDL_DestroyRenderer(renderer);
-    SDL_DestroyWindow(window);
-    SDL_Quit();
+    shutdown_sdl_systems(window, renderer, &audio);
     return 0;
 }
