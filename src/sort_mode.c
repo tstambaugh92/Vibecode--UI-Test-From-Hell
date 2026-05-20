@@ -34,6 +34,7 @@ const char *sort_algorithm_name(Algorithm alg) {
         case ALG_QUICK: return "Quick";
         case ALG_MERGE: return "Merge";
         case ALG_HEAP: return "Heap";
+        case ALG_STALIN: return "Stalin";
         default: return "Unknown";
     }
 }
@@ -339,6 +340,20 @@ static bool build_heap_ops(SortState *state, int arr[]) {
     return true;
 }
 
+static bool build_stalin_ops(SortState *state, int arr[]) {
+    int leader_idx = 0;
+    for (int i = 1; i < BAR_COUNT; i++) {
+        if (!emit_op(state, OP_COMPARE, leader_idx, i, 0)) return false;
+        if (arr[i] >= arr[leader_idx]) {
+            leader_idx = i;
+        } else {
+            arr[i] = 0;
+            if (!emit_op(state, OP_WRITE, i, leader_idx, 0)) return false;
+        }
+    }
+    return true;
+}
+
 /**************************************************************************
  * sort_build_ops
  *
@@ -368,6 +383,7 @@ bool sort_build_ops(SortState *state) {
         case ALG_QUICK: ok = build_quick_ops(state, arr); break;
         case ALG_MERGE: ok = build_merge_ops(state, arr); break;
         case ALG_HEAP: ok = build_heap_ops(state, arr); break;
+        case ALG_STALIN: ok = build_stalin_ops(state, arr); break;
         default: break;
     }
     if (!ok) return false;
@@ -432,13 +448,23 @@ void sort_execute_step(SortState *state, AudioState *audio) {
         state->cycle_count++;
         state->highlight_a = -1;
         state->highlight_b = -1;
-        audio_clear(audio);
-        state->celebration_pending = true;
+        state->celebration_pending = false;
         state->celebration_active = false;
         state->auto_restart_pending = false;
         state->celebration_index = 0;
         state->auto_restart_at_ms = 0;
         state->celebration_accumulator = 0.0;
+        if (state->algorithm == ALG_STALIN) {
+            Uint32 motif_ms = audio_play_midi_excerpt(audio, "audio/ussranthem.mid", 9.9, state->sound_on);
+            if (motif_ms == 0) {
+                motif_ms = audio_play_stalin_anthem(audio, state->sound_on);
+            }
+            state->auto_restart_pending = true;
+            state->auto_restart_at_ms = SDL_GetTicks() + motif_ms;
+        } else {
+            audio_clear(audio);
+            state->celebration_pending = true;
+        }
         return;
     }
 
@@ -590,7 +616,7 @@ static void draw_hud(
 
     const char *help_lines[] = {
         "Controls",
-        "1..6 algorithm  |  S start/pause  |  R reshuffle",
+        "1..7 algorithm  |  S start/pause  |  R reshuffle",
         "F/F11 fullscreen | +/- speed | M mute | B animated bg | H help",
         "Numpad 1-9 palette | Esc quit",
         "Secret code: S N A K E"
@@ -733,7 +759,7 @@ void sort_update_title(SDL_Window *window, const SortState *state) {
     snprintf(
         title,
         sizeof(title),
-        "Vibecode: UI Test From Hell | 1..6 Algorithm | S Start/Pause | R Shuffle | M Mute | +/- Speed | Alg=%s | Ops %d/%d | Sound=%s | Speed=%.4fs",
+        "Vibecode: UI Test From Hell | 1..7 Algorithm | S Start/Pause | R Shuffle | M Mute | +/- Speed | Alg=%s | Ops %d/%d | Sound=%s | Speed=%.4fs",
         sort_algorithm_name(state->algorithm),
         state->ops_index,
         state->ops_count,

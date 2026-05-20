@@ -96,7 +96,7 @@ to support, or inside a container based on one.
 
 ## Controls
 
-- `1..6` select sorting algorithm
+- `1..7` select sorting algorithm
 - `S` start/pause
 - `R` reshuffle
 - `+/-` speed up/down

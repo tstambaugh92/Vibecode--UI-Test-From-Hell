@@ -14,7 +14,8 @@ typedef enum {
     ALG_SELECTION = 2,
     ALG_QUICK = 3,
     ALG_MERGE = 4,
-    ALG_HEAP = 5
+    ALG_HEAP = 5,
+    ALG_STALIN = 6
 } Algorithm;
 
 typedef enum {

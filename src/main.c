@@ -137,7 +137,6 @@ static void handle_sort_key(
     bool *is_fullscreen,
     SDL_Window *window
 ) {
-    bool should_autostart = false;
     switch (key) {
         case SDLK_F:
         case SDLK_F11:
@@ -148,43 +147,41 @@ static void handle_sort_key(
             sort_set_algorithm(sort, ALG_BUBBLE);
             sort_build_ops(sort);
             audio_clear(audio);
-            should_autostart = true;
             break;
         case SDLK_2:
             sort_set_algorithm(sort, ALG_INSERTION);
             sort_build_ops(sort);
             audio_clear(audio);
-            should_autostart = true;
             break;
         case SDLK_3:
             sort_set_algorithm(sort, ALG_SELECTION);
             sort_build_ops(sort);
             audio_clear(audio);
-            should_autostart = true;
             break;
         case SDLK_4:
             sort_set_algorithm(sort, ALG_QUICK);
             sort_build_ops(sort);
             audio_clear(audio);
-            should_autostart = true;
             break;
         case SDLK_5:
             sort_set_algorithm(sort, ALG_MERGE);
             sort_build_ops(sort);
             audio_clear(audio);
-            should_autostart = true;
             break;
         case SDLK_6:
             sort_set_algorithm(sort, ALG_HEAP);
             sort_build_ops(sort);
             audio_clear(audio);
-            should_autostart = true;
+            break;
+        case SDLK_7:
+            sort_set_algorithm(sort, ALG_STALIN);
+            sort_build_ops(sort);
+            audio_clear(audio);
             break;
         case SDLK_R:
             sort_shuffle_values(sort);
             sort_build_ops(sort);
             audio_clear(audio);
-            should_autostart = true;
             break;
         case SDLK_H:
             sort->show_help = !sort->show_help;
@@ -239,96 +236,76 @@ static void handle_sort_key(
             break;
     }
 
-    if (should_autostart) {
-        sort->running = true;
-        sort->run_started_ms = SDL_GetTicks();
-    }
 }
 
 /**************************************************************************
- * handle_snake_mode_key
+ * handle_snake_key
  *
  * Purpose:
- *   Handle key input while running full-screen snake mode.
+ *   Handle snake input in either full-screen mode or PiP overlay mode.
  *
  * Input:
  *   key - key pressed
  *   ctx - shared input context
  *
  * Output:
- *   None
+ *   bool - true if snake handled the key
  **************************************************************************/
-static void handle_snake_mode_key(SDL_Keycode key, InputContext *ctx) {
+static bool handle_snake_key(SDL_Keycode key, InputContext *ctx) {
+    bool full_snake = (*ctx->mode == MODE_SNAKE);
+    bool overlay_snake = (*ctx->mode == MODE_SORT && *ctx->snake_overlay);
+
+    if (!full_snake && !overlay_snake) return false;
+
     switch (key) {
         case SDLK_TAB:
-            *ctx->mode = MODE_SORT;
-            *ctx->snake_overlay = true;
-            ctx->sort->running = true;
+            if (full_snake) {
+                *ctx->mode = MODE_SORT;
+                *ctx->snake_overlay = true;
+                ctx->sort->running = true;
+            } else {
+                *ctx->mode = MODE_SNAKE;
+                *ctx->snake_overlay = false;
+                audio_clear(ctx->audio);
+            }
             sort_update_title(ctx->window, ctx->sort);
-            break;
+            return true;
         case SDLK_X:
             *ctx->mode = MODE_SORT;
             *ctx->snake_overlay = false;
             ctx->snake->started = false;
             ctx->sort->running = true;
             sort_update_title(ctx->window, ctx->sort);
-            break;
+            return true;
         case SDLK_SPACE:
             snake_reset(ctx->snake, ctx->snake_cols, ctx->snake_rows);
-            break;
+            return true;
         case SDLK_UP:
-        case SDLK_W:
             snake_set_direction(ctx->snake, 0, -1);
-            break;
+            return true;
         case SDLK_DOWN:
-        case SDLK_S:
             snake_set_direction(ctx->snake, 0, 1);
-            break;
+            return true;
         case SDLK_LEFT:
-        case SDLK_A:
             snake_set_direction(ctx->snake, -1, 0);
-            break;
+            return true;
         case SDLK_RIGHT:
-        case SDLK_D:
             snake_set_direction(ctx->snake, 1, 0);
-            break;
-        default:
-            break;
-    }
-}
-
-/**************************************************************************
- * handle_snake_overlay_key
- *
- * Purpose:
- *   Handle PiP snake controls while sort mode remains active.
- *
- * Input:
- *   key - key pressed
- *   ctx - shared input context
- *
- * Output:
- *   bool - true if key was consumed by overlay controls
- **************************************************************************/
-static bool handle_snake_overlay_key(SDL_Keycode key, InputContext *ctx) {
-    switch (key) {
-        case SDLK_X:
-            *ctx->snake_overlay = false;
-            ctx->snake->started = false;
             return true;
-        case SDLK_SPACE:
-            snake_reset(ctx->snake, ctx->snake_cols, ctx->snake_rows);
-            return true;
-        case SDLK_UP:
+        case SDLK_W:
+            if (!full_snake) return false;
             snake_set_direction(ctx->snake, 0, -1);
             return true;
-        case SDLK_DOWN:
+        case SDLK_S:
+            if (!full_snake) return false;
             snake_set_direction(ctx->snake, 0, 1);
             return true;
-        case SDLK_LEFT:
+        case SDLK_A:
+            if (!full_snake) return false;
             snake_set_direction(ctx->snake, -1, 0);
             return true;
-        case SDLK_RIGHT:
+        case SDLK_D:
+            if (!full_snake) return false;
             snake_set_direction(ctx->snake, 1, 0);
             return true;
         default:
@@ -398,18 +375,7 @@ static void process_events(InputContext *ctx, bool *quit) {
             continue;
         }
 
-        if (*ctx->mode == MODE_SNAKE) {
-            handle_snake_mode_key(key, ctx);
-            continue;
-        }
-
-        if (key == SDLK_TAB && *ctx->snake_overlay) {
-            *ctx->mode = MODE_SNAKE;
-            *ctx->snake_overlay = false;
-            continue;
-        }
-
-        if (*ctx->snake_overlay && handle_snake_overlay_key(key, ctx)) {
+        if (handle_snake_key(key, ctx)) {
             continue;
         }
 
