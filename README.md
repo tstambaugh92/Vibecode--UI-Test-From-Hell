@@ -10,11 +10,9 @@ I'm not a lawyer, I don't claim any of this vibecode is mine and intend for it o
 
 I don't know what the actual rules are as far as an SDL3 package under release goes. SDL3 is under the zlib license to my knowledge. If I'm violating any rules, make a PR with a correction or contact me at stambtx@proton.me.
 
+As of 5/20/26, I added Stalin sort and confirmed another arch linux machine could build and run the app image. Maybe I'll see about windows too, but otherwise I'm about done messing with this.
 
-Demo:
-
-![Demo](demo.gif)
-
+The way that it runs the snake and sorting logic in easter egg mode without them stepping on eachother is something I would have struggled to figure out on my own, but also, any modern game engine just does that. Educational goodness.
 
 
 # Vibecode: UI Test From Hell
@@ -25,6 +23,8 @@ Interactive SDL3 playground featuring:
 - Animated background mode
 - Snake easter egg (fullscreen + PiP)
 
+![Demo](demo.gif)
+
 ## Build
 
 ### Linux
@@ -32,10 +32,7 @@ Interactive SDL3 playground featuring:
 make
 ```
 
-Run:
-```bash
-make run
-```
+The output is in the bin folder. You can run it either from the repo root or the bin folder and the audio should still work.
 
 ### Windows cross-build (from Linux)
 ```bash
@@ -47,52 +44,11 @@ Create a demo package folder (exe + optional SDL3.dll):
 make win-package SDL3_DLL=/path/to/SDL3.dll
 ```
 
+This is untested, by the way.
+
 ### Linux AppImage
 
-An AppImage is a single executable Linux bundle. For this project, the important
-bit is that SDL3 gets copied into the bundle, so the user does not need SDL3
-installed system-wide.
-
-You still need SDL3 installed on the build machine so the program can compile:
-
-```bash
-make deps
-make appdir
-```
-
-`make appdir` creates `.build/appimage/AppDir`, which is the staged application
-folder. It contains:
-
-- `usr/bin/vibecode_ui_test_from_hell`
-- an `AppRun` launcher
-- a desktop file
-- an icon
-
-To build the final AppImage, download the AppImage packaging tools, then run:
-
-```bash
-make appimage-tools
-make appimage
-```
-
-The output is written to:
-
-```text
-bin/vibecode_ui_test_from_hell-<arch>.AppImage
-```
-
-`linuxdeploy` scans the executable and copies shared libraries such as SDL3 into
-the AppDir. `appimagetool` then compresses that AppDir into the final AppImage
-using a downloaded AppImage runtime. The downloaded and extracted packaging
-tools are stored under `tools/appimage/`, which is ignored by git. The Makefile
-runs the extracted tools so packaging does not depend on FUSE being configured
-on the build machine. The AppDir also copies SDL3's license notice from
-`/usr/share/licenses/sdl3/LICENSE` when it is available.
-
-Compatibility note: AppImages do not magically avoid the glibc problem. If you
-build on a very new rolling distro, the AppImage may not run on older distros.
-For broad distribution, build the AppImage on the oldest Linux distro you want
-to support, or inside a container based on one.
+make appimage 
 
 ## Controls
 
@@ -114,15 +70,3 @@ Snake easter egg:
 - `Space` restarts snake when dead
 - `X` closes snake mode
 
-## Project Layout
-
-```text
-include/    public headers
-src/        implementation files
-bin/        built binaries
-```
-
-## Notes
-
-- Keep `Makefile` in sync when new build targets are added.
-- Windows build instructions: see `README-build-windows.md`.
