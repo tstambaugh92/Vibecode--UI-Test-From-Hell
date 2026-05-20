@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Vibecode UI Test From Hell
+Comment=SDL3 sorting visualizer and menu playground
+Exec=vibecode_ui_test_from_hell
+Icon=com.christhawk.vibecode_ui_test_from_hell
+Terminal=false
+Categories=Game;
