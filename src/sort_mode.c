@@ -1,4 +1,5 @@
 #include "sort_mode.h"
+#include "assets.h"
 #include "background.h"
 #include "constants.h"
 
@@ -455,7 +456,11 @@ void sort_execute_step(SortState *state, AudioState *audio) {
         state->auto_restart_at_ms = 0;
         state->celebration_accumulator = 0.0;
         if (state->algorithm == ALG_STALIN) {
-            Uint32 motif_ms = audio_play_midi_excerpt(audio, "audio/ussranthem.mid", 9.9, state->sound_on);
+            char midi_path[ASSET_PATH_MAX];
+            Uint32 motif_ms = 0;
+            if (asset_find_path(midi_path, sizeof(midi_path), "audio/ussranthem.mid")) {
+                motif_ms = audio_play_midi_excerpt(audio, midi_path, 9.9, state->sound_on);
+            }
             if (motif_ms == 0) {
                 motif_ms = audio_play_stalin_anthem(audio, state->sound_on);
             }

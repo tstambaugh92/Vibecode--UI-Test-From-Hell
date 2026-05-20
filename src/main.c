@@ -137,6 +137,8 @@ static void handle_sort_key(
     bool *is_fullscreen,
     SDL_Window *window
 ) {
+    bool is_cur_running = sort->running;
+
     switch (key) {
         case SDLK_F:
         case SDLK_F11:
@@ -144,39 +146,27 @@ static void handle_sort_key(
             SDL_SetWindowFullscreen(window, *is_fullscreen);
             break;
         case SDLK_1:
-            sort_set_algorithm(sort, ALG_BUBBLE);
-            sort_build_ops(sort);
-            audio_clear(audio);
-            break;
         case SDLK_2:
-            sort_set_algorithm(sort, ALG_INSERTION);
-            sort_build_ops(sort);
-            audio_clear(audio);
-            break;
         case SDLK_3:
-            sort_set_algorithm(sort, ALG_SELECTION);
-            sort_build_ops(sort);
-            audio_clear(audio);
-            break;
         case SDLK_4:
-            sort_set_algorithm(sort, ALG_QUICK);
-            sort_build_ops(sort);
-            audio_clear(audio);
-            break;
         case SDLK_5:
-            sort_set_algorithm(sort, ALG_MERGE);
-            sort_build_ops(sort);
-            audio_clear(audio);
-            break;
         case SDLK_6:
-            sort_set_algorithm(sort, ALG_HEAP);
-            sort_build_ops(sort);
-            audio_clear(audio);
-            break;
         case SDLK_7:
-            sort_set_algorithm(sort, ALG_STALIN);
+            switch (key)
+            {
+                case SDLK_1: sort_set_algorithm(sort,ALG_BUBBLE); break;
+                case SDLK_2: sort_set_algorithm(sort, ALG_INSERTION); break;
+                case SDLK_3: sort_set_algorithm(sort, ALG_SELECTION); break;
+                case SDLK_4: sort_set_algorithm(sort, ALG_QUICK); break;
+                case SDLK_5: sort_set_algorithm(sort, ALG_MERGE); break;
+                case SDLK_6: sort_set_algorithm(sort, ALG_HEAP); break;
+                case SDLK_7: sort_set_algorithm(sort, ALG_STALIN); break;
+            }
             sort_build_ops(sort);
             audio_clear(audio);
+            if(is_cur_running) {
+                sort_handle_start_pause(sort, audio);
+            }
             break;
         case SDLK_R:
             sort_shuffle_values(sort);

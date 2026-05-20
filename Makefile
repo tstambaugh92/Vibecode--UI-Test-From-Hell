@@ -10,6 +10,7 @@ WIN_PKG_DIR := $(BIN_DIR)/windows-package
 APPIMAGE_BUILD_DIR := $(BUILD_DIR)/appimage
 APPDIR := $(APPIMAGE_BUILD_DIR)/AppDir
 APP_ID := com.christhawk.vibecode_ui_test_from_hell
+APP_DATA_DIR := usr/share/$(APP_NAME)
 APPIMAGE_DESKTOP := $(APPDIR)/$(APP_ID).desktop
 APPIMAGE_ICON := $(APPDIR)/$(APP_ID).svg
 APPIMAGE_ARCH := $(shell uname -m)
@@ -139,12 +140,14 @@ appdir: linux
 	mkdir -p $(APPDIR)/usr/share/applications
 	mkdir -p $(APPDIR)/usr/share/icons/hicolor/scalable/apps
 	mkdir -p $(APPDIR)/usr/share/licenses/$(APP_ID)
+	mkdir -p $(APPDIR)/$(APP_DATA_DIR)
 	cp $(LINUX_TARGET) $(APPDIR)/usr/bin/$(APP_NAME)
-	printf '%s\n' '#!/bin/sh' 'HERE="$$(dirname "$$(readlink -f "$$0")")"' '' 'export LD_LIBRARY_PATH="$$HERE/usr/lib:$$HERE/usr/lib64:$$LD_LIBRARY_PATH"' '' 'exec "$$HERE/usr/bin/$(APP_NAME)" "$$@"' > $(APPDIR)/AppRun
+	printf '%s\n' '#!/bin/sh' 'HERE="$$(dirname "$$(readlink -f "$$0")")"' '' 'export LD_LIBRARY_PATH="$$HERE/usr/lib:$$HERE/usr/lib64:$$LD_LIBRARY_PATH"' 'export VIBECODE_DATA_DIR="$$HERE/$(APP_DATA_DIR)"' '' 'exec "$$HERE/usr/bin/$(APP_NAME)" "$$@"' > $(APPDIR)/AppRun
 	printf '%s\n' '[Desktop Entry]' 'Type=Application' 'Name=Vibecode UI Test From Hell' 'Comment=SDL3 sorting visualizer and secret snake toy' 'Exec=$(APP_NAME)' 'Icon=$(APP_ID)' 'Terminal=false' 'Categories=Game;' > $(APPIMAGE_DESKTOP)
 	printf '%s\n' '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">' '<rect width="128" height="128" rx="18" fill="#09101f"/>' '<rect x="18" y="26" width="10" height="76" fill="#009b48"/>' '<rect x="34" y="46" width="10" height="56" fill="#c41e3a"/>' '<rect x="50" y="18" width="10" height="84" fill="#0046ad"/>' '<rect x="66" y="62" width="10" height="40" fill="#ffcf00"/>' '<rect x="82" y="36" width="10" height="66" fill="#ff5800"/>' '<path d="M23 109h82" stroke="#edf2ff" stroke-width="6" stroke-linecap="round"/>' '<circle cx="101" cy="30" r="7" fill="#78f58c"/>' '</svg>' > $(APPIMAGE_ICON)
 	cp $(APPIMAGE_DESKTOP) $(APPDIR)/usr/share/applications/$(APP_ID).desktop
 	cp $(APPIMAGE_ICON) $(APPDIR)/usr/share/icons/hicolor/scalable/apps/$(APP_ID).svg
+	@if [ -d audio ]; then mkdir -p $(APPDIR)/$(APP_DATA_DIR)/audio; cp -R audio/. $(APPDIR)/$(APP_DATA_DIR)/audio/; fi
 	@if [ -f "$(SDL3_LICENSE)" ]; then cp "$(SDL3_LICENSE)" $(APPDIR)/usr/share/licenses/$(APP_ID)/SDL3-LICENSE.txt; else echo "Warning: SDL3 license not found at $(SDL3_LICENSE)"; fi
 	chmod +x $(APPDIR)/AppRun $(APPDIR)/usr/bin/$(APP_NAME)
 	@echo "AppDir staged at $(APPDIR)"
