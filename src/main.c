@@ -137,7 +137,7 @@ static void handle_sort_key(
     bool *is_fullscreen,
     SDL_Window *window
 ) {
-    bool is_cur_running = sort->running;
+    bool should_keep_running = sort->running || sort->auto_restart_pending;
 
     switch (key) {
         case SDLK_F:
@@ -152,6 +152,7 @@ static void handle_sort_key(
         case SDLK_5:
         case SDLK_6:
         case SDLK_7:
+        case SDLK_8:
             switch (key)
             {
                 case SDLK_1: sort_set_algorithm(sort,ALG_BUBBLE); break;
@@ -161,10 +162,11 @@ static void handle_sort_key(
                 case SDLK_5: sort_set_algorithm(sort, ALG_MERGE); break;
                 case SDLK_6: sort_set_algorithm(sort, ALG_HEAP); break;
                 case SDLK_7: sort_set_algorithm(sort, ALG_STALIN); break;
+                case SDLK_8: sort_set_algorithm(sort, ALG_SLOT8); break;
             }
             sort_build_ops(sort);
             audio_clear(audio);
-            if(is_cur_running) {
+            if (should_keep_running) {
                 sort_handle_start_pause(sort, audio);
             }
             break;

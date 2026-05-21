@@ -70,3 +70,5 @@ Snake easter egg:
 - `Space` restarts snake when dead
 - `X` closes snake mode
 
+### Other Credits
+I love this font, Daniel Bold, https://www.dafont.com/daniel.font

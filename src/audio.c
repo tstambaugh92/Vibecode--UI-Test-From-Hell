@@ -179,6 +179,107 @@ void audio_enqueue_tone(AudioState *audio, float freq_hz, float gain) {
 }
 
 /**************************************************************************
+ * audio_play_buzz
+ *
+ * Purpose:
+ *   Queue one loud ugly warning buzz for cutscene-style failures.
+ *
+ * Input:
+ *   audio         - audio state
+ *   seconds       - duration to synthesize
+ *   sound_enabled - whether playback is allowed
+ *
+ * Output:
+ *   Uint32 - approximate queued playback duration in milliseconds
+ **************************************************************************/
+Uint32 audio_play_buzz(AudioState *audio, double seconds, bool sound_enabled) {
+    if (!sound_enabled || !audio->ready || !audio->stream || seconds <= 0.0) return 0;
+    audio_clear(audio);
+
+    int total_samples = (int)(seconds * (double)AUDIO_SAMPLE_RATE + 0.5);
+    if (total_samples < 1) total_samples = 1;
+    const int chunk_samples = 2048;
+    float buffer[chunk_samples];
+
+    int written = 0;
+    while (written < total_samples) {
+        int n = total_samples - written;
+        if (n > chunk_samples) n = chunk_samples;
+        for (int i = 0; i < n; i++) {
+            int idx = written + i;
+            double t = (double)idx / (double)AUDIO_SAMPLE_RATE;
+            float wobble = sinf((float)(2.0 * M_PI * 7.0 * t));
+            float carrier_a = sinf((float)(2.0 * M_PI * (92.0 + 18.0 * wobble) * t));
+            float carrier_b = sinf((float)(2.0 * M_PI * (184.0 - 12.0 * wobble) * t));
+            float squareish = carrier_a >= 0.0f ? 1.0f : -1.0f;
+            float env = 1.0f;
+            int fade = AUDIO_SAMPLE_RATE / 30;
+            if (idx < fade) env = (float)idx / (float)fade;
+            if (idx > total_samples - fade) env = (float)(total_samples - idx) / (float)fade;
+            if (env < 0.0f) env = 0.0f;
+            buffer[i] = ((0.52f * squareish) + (0.28f * carrier_b) + (0.20f * carrier_a)) * 0.42f * env;
+        }
+        SDL_PutAudioStreamData(audio->stream, buffer, n * (int)sizeof(float));
+        written += n;
+    }
+
+    return (Uint32)(seconds * 1000.0 + 0.5);
+}
+
+/**************************************************************************
+ * audio_play_wav_file
+ *
+ * Purpose:
+ *   Load a WAV file, convert it to the app's mono float stream format, and
+ *   queue it for playback.
+ *
+ * Input:
+ *   audio         - audio state
+ *   wav_path      - path to .wav file
+ *   sound_enabled - whether playback is allowed
+ *
+ * Output:
+ *   Uint32 - approximate queued playback duration in milliseconds
+ **************************************************************************/
+Uint32 audio_play_wav_file(AudioState *audio, const char *wav_path, bool sound_enabled) {
+    if (!sound_enabled || !audio->ready || !audio->stream || !wav_path) return 0;
+
+    SDL_AudioSpec src_spec = {0};
+    Uint8 *src_buf = NULL;
+    Uint32 src_len = 0;
+    if (!SDL_LoadWAV(wav_path, &src_spec, &src_buf, &src_len)) {
+        return 0;
+    }
+
+    SDL_AudioSpec dst_spec = {0};
+    dst_spec.format = SDL_AUDIO_F32;
+    dst_spec.channels = 1;
+    dst_spec.freq = AUDIO_SAMPLE_RATE;
+
+    Uint8 *dst_buf = NULL;
+    int dst_len = 0;
+    bool converted = SDL_ConvertAudioSamples(
+        &src_spec,
+        src_buf,
+        (int)src_len,
+        &dst_spec,
+        &dst_buf,
+        &dst_len
+    );
+    SDL_free(src_buf);
+    if (!converted || !dst_buf || dst_len <= 0) {
+        if (dst_buf) SDL_free(dst_buf);
+        return 0;
+    }
+
+    audio_clear(audio);
+    SDL_PutAudioStreamData(audio->stream, dst_buf, dst_len);
+    SDL_free(dst_buf);
+
+    return (Uint32)((1000.0 * (double)dst_len) / ((double)AUDIO_SAMPLE_RATE * sizeof(float)));
+}
+
+/**************************************************************************
  * audio_enqueue_tone_duration
  *
  * Purpose:
@@ -413,6 +514,21 @@ static float midi_note_to_hz(uint8_t note) {
     return 440.0f * powf(2.0f, ((float)note - 69.0f) / 12.0f);
 }
 
+typedef struct {
+    float freq_hz;
+    double seconds;
+} MidiSegment;
+
+#define MIDI_SEGMENT_MAX 4096
+
+static bool append_midi_segment(MidiSegment segments[], int *count, float freq_hz, double seconds) {
+    if (seconds <= 0.0) return true;
+    if (*count >= MIDI_SEGMENT_MAX) return false;
+    segments[*count] = (MidiSegment){freq_hz, seconds};
+    (*count)++;
+    return true;
+}
+
 /**************************************************************************
  * NoteEvent
  *
@@ -505,11 +621,13 @@ Uint32 audio_play_stalin_anthem(AudioState *audio, bool sound_enabled) {
  * Output:
  *   Uint32 - approximate queued playback duration in milliseconds
  **************************************************************************/
-Uint32 audio_play_midi_excerpt(AudioState *audio, const char *midi_path, double max_seconds, bool sound_enabled) {
+static Uint32 audio_play_midi_excerpt_internal(AudioState *audio, const char *midi_path, double max_seconds, bool sound_enabled, bool append_reverse) {
     if (!sound_enabled || !audio->ready || !audio->stream || !midi_path || max_seconds <= 0.0) return 0;
 
 
     float gain = .22f;
+    MidiSegment segments[MIDI_SEGMENT_MAX];
+    int segment_count = 0;
     FILE *fp = fopen(midi_path, "rb");
     if (!fp) return 0;
     if (fseek(fp, 0, SEEK_END) != 0) {
@@ -588,7 +706,6 @@ Uint32 audio_play_midi_excerpt(AudioState *audio, const char *midi_path, double 
         return 0;
     }
 
-    audio_clear(audio);
     uint8_t running_status = 0;
     uint32_t tempo_us_per_qn = 500000;
     double now_s = 0.0;
@@ -604,7 +721,7 @@ Uint32 audio_play_midi_excerpt(AudioState *audio, const char *midi_path, double 
         double event_time_s = now_s + delta_s;
 
         if (event_time_s > max_seconds) {
-            audio_enqueue_seconds(audio, active_hz, gain, max_seconds - emit_from_s);
+            append_midi_segment(segments, &segment_count, active_hz, max_seconds - emit_from_s);
             now_s = max_seconds;
             break;
         }
@@ -614,7 +731,7 @@ Uint32 audio_play_midi_excerpt(AudioState *audio, const char *midi_path, double 
          * was active. If active_hz is 0.0, this writes silence for a rest.
          */
         if (event_time_s > emit_from_s) {
-            audio_enqueue_seconds(audio, active_hz, gain, event_time_s - emit_from_s);
+            if (!append_midi_segment(segments, &segment_count, active_hz, event_time_s - emit_from_s)) break;
             emit_from_s = event_time_s;
         }
         now_s = event_time_s;
@@ -686,12 +803,36 @@ Uint32 audio_play_midi_excerpt(AudioState *audio, const char *midi_path, double 
         }
     }
 
-    if (now_s < max_seconds && emit_from_s < max_seconds) {
-        audio_enqueue_seconds(audio, active_hz, gain, max_seconds - emit_from_s);
+    if (!append_reverse && now_s < max_seconds && emit_from_s < max_seconds) {
+        append_midi_segment(segments, &segment_count, active_hz, max_seconds - emit_from_s);
+    }
+
+    if (append_reverse) {
+        while (segment_count > 0 && segments[segment_count - 1].freq_hz <= 0.0f) {
+            segment_count--;
+        }
+    }
+
+    audio_clear(audio);
+    for (int i = 0; i < segment_count; i++) {
+        audio_enqueue_seconds(audio, segments[i].freq_hz, gain, segments[i].seconds);
+    }
+    if (append_reverse) {
+        for (int i = segment_count - 1; i >= 0; i--) {
+            audio_enqueue_seconds(audio, segments[i].freq_hz, gain, segments[i].seconds);
+        }
     }
 
     int queued_bytes = SDL_GetAudioStreamQueued(audio->stream);
     free(bytes);
     if (queued_bytes <= 0) return 0;
     return (Uint32)((1000.0 * (double)queued_bytes) / ((double)AUDIO_SAMPLE_RATE * sizeof(float)));
+}
+
+Uint32 audio_play_midi_excerpt(AudioState *audio, const char *midi_path, double max_seconds, bool sound_enabled) {
+    return audio_play_midi_excerpt_internal(audio, midi_path, max_seconds, sound_enabled, false);
+}
+
+Uint32 audio_play_midi_excerpt_with_reverse(AudioState *audio, const char *midi_path, double max_seconds, bool sound_enabled) {
+    return audio_play_midi_excerpt_internal(audio, midi_path, max_seconds, sound_enabled, true);
 }

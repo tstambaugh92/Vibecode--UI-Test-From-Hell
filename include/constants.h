@@ -10,10 +10,10 @@
 #define AUDIO_SAMPLE_RATE 48000
 #define AUDIO_TONE_MS 14
 /*
- * Keep up to ~20 seconds of mono float audio queued so longer motifs
+ * Keep up to ~32 seconds of mono float audio queued so longer motifs
  * can enqueue without getting dropped by the safety cap.
  */
-#define AUDIO_MAX_QUEUED_BYTES (AUDIO_SAMPLE_RATE * (int)sizeof(float) * 20)
+#define AUDIO_MAX_QUEUED_BYTES (AUDIO_SAMPLE_RATE * (int)sizeof(float) * 32)
 
 #define SIDE_MARGIN 26.0f
 #define BAR_GAP 1.0f

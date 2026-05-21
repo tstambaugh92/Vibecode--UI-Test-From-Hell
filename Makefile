@@ -32,16 +32,22 @@ LINUX_CC := gcc
 LINUX_PKG_CONFIG ?= pkg-config
 LINUX_SDL_CFLAGS := $(shell $(LINUX_PKG_CONFIG) --cflags sdl3 2>/dev/null)
 LINUX_SDL_LIBS := $(shell $(LINUX_PKG_CONFIG) --libs sdl3 2>/dev/null)
-LINUX_CFLAGS := -std=c11 -O2 -Wall -Wextra -I$(INC_DIR) $(LINUX_SDL_CFLAGS)
-LINUX_LDFLAGS := -lm $(LINUX_SDL_LIBS)
+LINUX_FREETYPE_CFLAGS := $(shell $(LINUX_PKG_CONFIG) --exists freetype2 2>/dev/null && $(LINUX_PKG_CONFIG) --cflags freetype2 2>/dev/null)
+LINUX_FREETYPE_LIBS := $(shell $(LINUX_PKG_CONFIG) --exists freetype2 2>/dev/null && $(LINUX_PKG_CONFIG) --libs freetype2 2>/dev/null)
+LINUX_FREETYPE_DEFINE := $(shell $(LINUX_PKG_CONFIG) --exists freetype2 2>/dev/null && echo -DHAVE_FREETYPE=1)
+LINUX_CFLAGS := -std=c11 -O2 -Wall -Wextra -I$(INC_DIR) $(LINUX_FREETYPE_DEFINE) $(LINUX_SDL_CFLAGS) $(LINUX_FREETYPE_CFLAGS)
+LINUX_LDFLAGS := -lm $(LINUX_SDL_LIBS) $(LINUX_FREETYPE_LIBS)
 LINUX_TARGET := $(BIN_DIR)/$(APP_NAME)
 
 WIN_CC ?= x86_64-w64-mingw32-gcc
 WIN_PKG_CONFIG ?= x86_64-w64-mingw32-pkg-config
 WIN_SDL_CFLAGS := $(shell command -v $(WIN_PKG_CONFIG) >/dev/null 2>&1 && $(WIN_PKG_CONFIG) --cflags sdl3 2>/dev/null)
 WIN_SDL_LIBS := $(shell command -v $(WIN_PKG_CONFIG) >/dev/null 2>&1 && $(WIN_PKG_CONFIG) --libs sdl3 2>/dev/null)
-WIN_CFLAGS := -std=c11 -O2 -Wall -Wextra -I$(INC_DIR) $(WIN_SDL_CFLAGS)
-WIN_LDFLAGS := -lm $(WIN_SDL_LIBS)
+WIN_FREETYPE_CFLAGS := $(shell command -v $(WIN_PKG_CONFIG) >/dev/null 2>&1 && $(WIN_PKG_CONFIG) --exists freetype2 2>/dev/null && $(WIN_PKG_CONFIG) --cflags freetype2 2>/dev/null)
+WIN_FREETYPE_LIBS := $(shell command -v $(WIN_PKG_CONFIG) >/dev/null 2>&1 && $(WIN_PKG_CONFIG) --exists freetype2 2>/dev/null && $(WIN_PKG_CONFIG) --libs freetype2 2>/dev/null)
+WIN_FREETYPE_DEFINE := $(shell command -v $(WIN_PKG_CONFIG) >/dev/null 2>&1 && $(WIN_PKG_CONFIG) --exists freetype2 2>/dev/null && echo -DHAVE_FREETYPE=1)
+WIN_CFLAGS := -std=c11 -O2 -Wall -Wextra -I$(INC_DIR) $(WIN_FREETYPE_DEFINE) $(WIN_SDL_CFLAGS) $(WIN_FREETYPE_CFLAGS)
+WIN_LDFLAGS := -lm $(WIN_SDL_LIBS) $(WIN_FREETYPE_LIBS)
 WIN_TARGET := $(BIN_DIR)/$(APP_NAME).exe
 LINUXDEPLOY ?= $(APPIMAGE_TOOL_DIR)/linuxdeploy.AppDir/AppRun
 APPIMAGETOOL ?= $(APPIMAGE_TOOL_DIR)/appimagetool.AppDir/AppRun
@@ -125,6 +131,9 @@ win-package: win
 	rm -rf $(WIN_PKG_DIR)
 	mkdir -p $(WIN_PKG_DIR)
 	cp $(WIN_TARGET) $(WIN_PKG_DIR)/
+	@if [ -d audio ]; then mkdir -p $(WIN_PKG_DIR)/audio; cp -R audio/. $(WIN_PKG_DIR)/audio/; fi
+	@if [ -d images ]; then mkdir -p $(WIN_PKG_DIR)/images; cp -R images/. $(WIN_PKG_DIR)/images/; fi
+	@if [ -d font ]; then mkdir -p $(WIN_PKG_DIR)/font; cp -R font/. $(WIN_PKG_DIR)/font/; fi
 	@if [ -n "$(SDL3_DLL)" ] && [ -f "$(SDL3_DLL)" ]; then \
 		cp "$(SDL3_DLL)" $(WIN_PKG_DIR)/SDL3.dll; \
 	elif [ -n "$(SDL3_DLL_DIR)" ] && [ -f "$(SDL3_DLL_DIR)/SDL3.dll" ]; then \
@@ -148,6 +157,8 @@ appdir: linux
 	cp $(APPIMAGE_DESKTOP) $(APPDIR)/usr/share/applications/$(APP_ID).desktop
 	cp $(APPIMAGE_ICON) $(APPDIR)/usr/share/icons/hicolor/scalable/apps/$(APP_ID).svg
 	@if [ -d audio ]; then mkdir -p $(APPDIR)/$(APP_DATA_DIR)/audio; cp -R audio/. $(APPDIR)/$(APP_DATA_DIR)/audio/; fi
+	@if [ -d images ]; then mkdir -p $(APPDIR)/$(APP_DATA_DIR)/images; cp -R images/. $(APPDIR)/$(APP_DATA_DIR)/images/; fi
+	@if [ -d font ]; then mkdir -p $(APPDIR)/$(APP_DATA_DIR)/font; cp -R font/. $(APPDIR)/$(APP_DATA_DIR)/font/; fi
 	@if [ -f "$(SDL3_LICENSE)" ]; then cp "$(SDL3_LICENSE)" $(APPDIR)/usr/share/licenses/$(APP_ID)/SDL3-LICENSE.txt; else echo "Warning: SDL3 license not found at $(SDL3_LICENSE)"; fi
 	chmod +x $(APPDIR)/AppRun $(APPDIR)/usr/bin/$(APP_NAME)
 	@echo "AppDir staged at $(APPDIR)"
@@ -170,6 +181,7 @@ deps-linux:
 	@command -v $(LINUX_CC) >/dev/null 2>&1 || { echo "Missing: $(LINUX_CC)"; exit 1; }
 	@command -v $(LINUX_PKG_CONFIG) >/dev/null 2>&1 || { echo "Missing: $(LINUX_PKG_CONFIG)"; exit 1; }
 	@$(LINUX_PKG_CONFIG) --exists sdl3 || { echo "Missing pkg-config entry: sdl3"; exit 1; }
+	@$(LINUX_PKG_CONFIG) --exists freetype2 && echo "OK: freetype2 found; Daniel Bold error text enabled." || echo "Optional: freetype2 missing; error text falls back to SDL debug text."
 	@echo "OK: Linux deps found ($(LINUX_CC), $(LINUX_PKG_CONFIG), sdl3)."
 
 deps-win:
@@ -177,6 +189,7 @@ deps-win:
 	@command -v $(WIN_CC) >/dev/null 2>&1 || { echo "Missing: $(WIN_CC)"; exit 1; }
 	@command -v $(WIN_PKG_CONFIG) >/dev/null 2>&1 || { echo "Missing: $(WIN_PKG_CONFIG)"; exit 1; }
 	@$(WIN_PKG_CONFIG) --exists sdl3 || { echo "Missing pkg-config entry for cross target: sdl3"; exit 1; }
+	@$(WIN_PKG_CONFIG) --exists freetype2 && echo "OK: cross freetype2 found; Daniel Bold error text enabled." || echo "Optional: cross freetype2 missing; error text falls back to SDL debug text."
 	@echo "OK: Windows cross deps found ($(WIN_CC), $(WIN_PKG_CONFIG), sdl3)."
 
 deps-appimage:

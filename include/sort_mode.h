@@ -15,7 +15,8 @@ typedef enum {
     ALG_QUICK = 3,
     ALG_MERGE = 4,
     ALG_HEAP = 5,
-    ALG_STALIN = 6
+    ALG_STALIN = 6,
+    ALG_SLOT8 = 7
 } Algorithm;
 
 typedef enum {
@@ -23,6 +24,17 @@ typedef enum {
     OP_SWAP = 1,
     OP_WRITE = 2
 } OpType;
+
+typedef enum {
+    SLOT8_IDLE = 0,
+    SLOT8_BOGO = 1,
+    SLOT8_BUZZ_ONE = 2,
+    SLOT8_QUICK = 3,
+    SLOT8_VERIFY = 4,
+    SLOT8_ELEPHANT_BUZZ = 5,
+    SLOT8_ELEPHANT_SWEEP = 6,
+    SLOT8_ERROR = 7
+} Slot8Phase;
 
 typedef struct {
     OpType type;
@@ -58,6 +70,13 @@ typedef struct {
     int write_ops;
     int palette_index;
     bool animated_bg_on;
+    Slot8Phase slot8_phase;
+    Uint64 slot8_phase_started_ms;
+    Uint64 slot8_phase_ends_ms;
+    Uint64 slot8_next_action_ms;
+    bool slot8_audio_started;
+    bool slot8_midi_started;
+    float slot8_elephant_progress;
 } SortState;
 
 /**************************************************************************
